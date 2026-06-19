@@ -92,11 +92,7 @@ export default function NeymarStatus() {
             </h2>
           </div>
 
-          {match && (
-            <div className="animate-pulse-slow">
-              <MatchCard match={match} highlight />
-            </div>
-          )}
+          {match && <MatchCard match={match} />}
         </div>
       </>
     );
@@ -108,20 +104,13 @@ export default function NeymarStatus() {
         😭 🚫 😩
       </div>
       <div>
-        <p className="text-sm uppercase tracking-[0.3em] opacity-50 mb-4">
-          AINDA NÃO TÁ PODENDO JOGAR
+        <p className="text-sm uppercase tracking-[0.3em] mb-4 font-bold">
+          JÁ TÁ PODENDO JOGAR?
         </p>
         <h1 className="text-3xl sm:text-4xl md:text-6xl font-bold leading-tight mb-6 font-poppins">
           {phrase}
         </h1>
       </div>
-
-      {nextMatch && (
-        <div className="opacity-60">
-          <p className="text-xs uppercase tracking-widest mb-3">Próximo jogo do Santos</p>
-          <MatchCard match={nextMatch} />
-        </div>
-      )}
 
       {error && (
         <p className="text-sm opacity-50 max-w-md">{error}</p>
