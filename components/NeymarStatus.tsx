@@ -14,16 +14,16 @@ export default function NeymarStatus() {
   useEffect(() => {
     const main = document.querySelector('main');
     if (main) {
-      main.style.backgroundColor = '#0a0a0a';
+      main.style.backgroundColor = '#E63946';
       main.style.transition = 'background-color 1s ease';
     }
-    document.body.style.backgroundColor = '#0a0a0a';
+    document.body.style.backgroundColor = '#E63946';
     document.body.style.transition = 'background-color 1s ease';
   }, []);
 
   useEffect(() => {
     if (!data) return;
-    const color = data.playing ? '#16a34a' : '#0a0a0a';
+    const color = data.playing ? '#16a34a' : '#E63946';
     const main = document.querySelector('main');
     if (main) {
       main.style.backgroundColor = color;
@@ -84,11 +84,12 @@ export default function NeymarStatus() {
             <p className="text-sm uppercase tracking-[0.3em] opacity-70 mb-2">
               Escalação confirmada
             </p>
-            <h1 className="text-5xl sm:text-6xl md:text-8xl font-black leading-tight bg-gradient-to-r from-green-200 via-white to-green-200 bg-clip-text text-transparent">
+            <h1 className="text-5xl sm:text-6xl md:text-8xl font-black leading-tight bg-gradient-to-r from-green-200 via-white to-green-200 bg-clip-text text-transparent font-headline tracking-tight">
               JÁ TÁ PODENDO
-              <br />
-              JOGAR!
             </h1>
+            <h2 className="text-5xl sm:text-6xl md:text-8xl font-black leading-tight bg-gradient-to-r from-green-200 via-white to-green-200 bg-clip-text text-transparent font-montserrat tracking-tight mt-2">
+              JOGAR!
+            </h2>
           </div>
 
           {match && (
@@ -96,8 +97,6 @@ export default function NeymarStatus() {
               <MatchCard match={match} highlight />
             </div>
           )}
-
-          <p className="text-lg animate-pulse">🇧🇷 Vai brasil!</p>
         </div>
       </>
     );
@@ -105,11 +104,14 @@ export default function NeymarStatus() {
 
   return (
     <div className="flex flex-col items-center justify-center gap-8 text-white text-center px-4">
+      <div className="text-6xl sm:text-7xl opacity-80">
+        😭 🚫 😩
+      </div>
       <div>
         <p className="text-sm uppercase tracking-[0.3em] opacity-50 mb-4">
           AINDA NÃO TÁ PODENDO JOGAR
         </p>
-        <h1 className="text-3xl sm:text-4xl md:text-6xl font-black leading-tight mb-6">
+        <h1 className="text-3xl sm:text-4xl md:text-6xl font-bold leading-tight mb-6 font-poppins">
           {phrase}
         </h1>
       </div>
@@ -124,12 +126,6 @@ export default function NeymarStatus() {
       {error && (
         <p className="text-sm opacity-50 max-w-md">{error}</p>
       )}
-
-      <div className="text-center mt-4">
-        <p className="text-xs opacity-30">
-          Recarregue a página para verificar novamente
-        </p>
-      </div>
     </div>
   );
 }

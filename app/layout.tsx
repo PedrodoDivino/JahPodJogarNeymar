@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { Inter, Space_Grotesk } from 'next/font/google';
+import { Inter, Space_Grotesk, Montserrat, Poppins } from 'next/font/google';
 import './globals.css';
 
 const inter = Inter({
@@ -11,6 +11,19 @@ const inter = Inter({
 const spaceGrotesk = Space_Grotesk({
   subsets: ['latin'],
   variable: '--font-space-grotesk',
+  display: 'swap',
+});
+
+const montserrat = Montserrat({
+  subsets: ['latin'],
+  variable: '--font-montserrat',
+  display: 'swap',
+});
+
+const poppins = Poppins({
+  subsets: ['latin'],
+  weight: '700',
+  variable: '--font-poppins',
   display: 'swap',
 });
 
@@ -37,7 +50,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="pt-BR" className={`${inter.variable} ${spaceGrotesk.variable}`}>
+    <html lang="pt-BR" className={`${inter.variable} ${spaceGrotesk.variable} ${montserrat.variable} ${poppins.variable}`}>
       <body className="font-sans antialiased">{children}</body>
     </html>
   );

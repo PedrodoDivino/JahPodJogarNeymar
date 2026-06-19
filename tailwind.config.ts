@@ -19,6 +19,9 @@ const config: Config = {
       fontFamily: {
         sans: ['Inter', 'system-ui', 'sans-serif'],
         display: ['Space Grotesk', 'system-ui', 'sans-serif'],
+        headline: ['"Helvetica Neue"', 'Helvetica', 'Arial', 'sans-serif'],
+        montserrat: ['var(--font-montserrat)', 'sans-serif'],
+        poppins: ['var(--font-poppins)', 'sans-serif'],
       },
       animation: {
         'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
