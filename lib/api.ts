@@ -1,28 +1,76 @@
-import { MatchInfo } from '@/types';
+import type { MatchInfo } from '@/types';
 
 const SANTOS_TEAM_ID = 134286;
 const BRAZIL_TEAM_ID = 134496;
 const THE_SPORTS_DB_BASE = 'https://www.thesportsdb.com/api/v1/json/3';
+const BRAZIL_TIME_ZONE = 'America/Sao_Paulo';
+const DATE_ONLY_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
+
+function formatBrazilDateKey(date: Date): string {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: BRAZIL_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date);
+
+  const year = parts.find((part) => part.type === 'year')?.value;
+  const month = parts.find((part) => part.type === 'month')?.value;
+  const day = parts.find((part) => part.type === 'day')?.value;
+
+  return `${year}-${month}-${day}`;
+}
+
+function parseDateOnly(dateStr: string): Date | null {
+  const match = DATE_ONLY_RE.exec(dateStr);
+  if (!match) return null;
+
+  const [, year, month, day] = match;
+  return new Date(
+    Date.UTC(Number(year), Number(month) - 1, Number(day), 12)
+  );
+}
 
 function parseDate(dateStr: string): Date | null {
   if (!dateStr) return null;
+  const dateOnly = parseDateOnly(dateStr);
+  if (dateOnly) return dateOnly;
+
   const d = new Date(dateStr);
   return isNaN(d.getTime()) ? null : d;
 }
 
-function isTodayOrUpcoming(dateStr: string): boolean {
+function parseEventTimestamp(timestamp: string): Date | null {
+  if (!timestamp) return null;
+  const hasTimeZone = /(?:z|[+-]\d{2}:?\d{2})$/i.test(timestamp);
+  const normalized = hasTimeZone ? timestamp : `${timestamp}Z`;
+  const d = new Date(normalized);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function eventDateKey(event: any): string | null {
+  const timestamp = parseEventTimestamp(event.strTimestamp || '');
+  if (timestamp) return formatBrazilDateKey(timestamp);
+
+  const dateStr = event.dateEvent || event.strDate || '';
+  if (!dateStr) return null;
+
+  if (DATE_ONLY_RE.test(dateStr)) return dateStr;
+
   const d = parseDate(dateStr);
-  if (!d) return false;
-  const now = new Date();
-  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const endOfToday = new Date(startOfToday.getTime() + 24 * 60 * 60 * 1000);
-  return d >= startOfToday && d < endOfToday;
+  return d ? formatBrazilDateKey(d) : null;
+}
+
+function isTodayOrUpcoming(event: any): boolean {
+  const key = eventDateKey(event);
+  return key === formatBrazilDateKey(new Date());
 }
 
 function formatMatchDate(dateStr: string): string {
   const d = parseDate(dateStr);
   if (!d) return 'Data a confirmar';
   return d.toLocaleDateString('pt-BR', {
+    timeZone: BRAZIL_TIME_ZONE,
     weekday: 'long',
     day: 'numeric',
     month: 'long',
@@ -30,11 +78,43 @@ function formatMatchDate(dateStr: string): string {
   });
 }
 
-function extractTime(dateStr: string): string {
-  if (!dateStr) return 'Horário a confirmar';
+function formatEventDate(event: any): string {
+  const timestamp = parseEventTimestamp(event.strTimestamp || '');
+  if (timestamp) {
+    return timestamp.toLocaleDateString('pt-BR', {
+      timeZone: BRAZIL_TIME_ZONE,
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+    });
+  }
+
+  return formatMatchDate(event.dateEvent || event.strDate || '');
+}
+
+function extractTime(event: any): string {
+  const timestamp = parseEventTimestamp(event.strTimestamp || '');
+  if (timestamp) {
+    return timestamp.toLocaleTimeString('pt-BR', {
+      timeZone: BRAZIL_TIME_ZONE,
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  }
+
+  if (event.strTime) return String(event.strTime).slice(0, 5);
+
+  const dateStr = event.dateEvent || event.strDate || '';
+  if (!dateStr || DATE_ONLY_RE.test(dateStr)) return 'Horário a confirmar';
+
   const d = parseDate(dateStr);
   if (!d) return 'Horário a confirmar';
-  return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  return d.toLocaleTimeString('pt-BR', {
+    timeZone: BRAZIL_TIME_ZONE,
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
 function extractStadium(event: any): string {
@@ -69,8 +149,8 @@ function eventToMatchInfo(event: any): MatchInfo {
     awayTeam: event.strAwayTeam || 'Time visitante',
     homeLogo: extractTeamLogo(event.strHomeTeam),
     awayLogo: extractTeamLogo(event.strAwayTeam),
-    date: formatMatchDate(event.dateEvent || event.strDate || ''),
-    time: extractTime(event.dateEvent || event.strDate || ''),
+    date: formatEventDate(event),
+    time: extractTime(event),
     stadium: extractStadium(event),
   };
 }
@@ -122,9 +202,7 @@ export async function checkMatchViaTheSportsDB(): Promise<{
       return { playing: false, match: null, nextMatch: null };
     }
 
-    const todayEvents = allEvents.filter((e) =>
-      isTodayOrUpcoming(e.dateEvent || e.strDate || '')
-    );
+    const todayEvents = allEvents.filter(isTodayOrUpcoming);
 
     const matchToday = todayEvents.find(isNeymarRelated) || null;
 
