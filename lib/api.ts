@@ -1,6 +1,7 @@
 import { MatchInfo } from '@/types';
 
 const SANTOS_TEAM_ID = 1861;
+const BRAZIL_TEAM_ID = 26;
 const THE_SPORTS_DB_BASE = 'https://www.thesportsdb.com/api/v1/json/3';
 
 function parseDate(dateStr: string): Date | null {
@@ -47,11 +48,16 @@ function extractTournament(event: any): string {
   return 'Campeonato a confirmar';
 }
 
-function extractTeamLogo(team: string, isHome: boolean): string {
-  if (team?.toLowerCase().includes('santos')) {
+function extractTeamLogo(team: string): string {
+  if (!team) return '';
+  const lower = team.toLowerCase();
+  if (lower.includes('santos')) {
     return 'https://www.thesportsdb.com/images/media/team/badge/n9qrn31715645718.png';
   }
-  const name = team?.toLowerCase().replace(/\s+/g, '') || '';
+  if (lower.includes('brazil') || lower.includes('brasil')) {
+    return 'https://www.thesportsdb.com/images/media/team/badge/26.png';
+  }
+  const name = lower.replace(/\s+/g, '');
   return `https://www.thesportsdb.com/images/media/team/badge/${name}.png`;
 }
 
@@ -61,8 +67,8 @@ function eventToMatchInfo(event: any): MatchInfo {
     tournament: extractTournament(event),
     homeTeam: event.strHomeTeam || 'Time da casa',
     awayTeam: event.strAwayTeam || 'Time visitante',
-    homeLogo: extractTeamLogo(event.strHomeTeam, true),
-    awayLogo: extractTeamLogo(event.strAwayTeam, false),
+    homeLogo: extractTeamLogo(event.strHomeTeam),
+    awayLogo: extractTeamLogo(event.strAwayTeam),
     date: formatMatchDate(event.dateEvent || event.strDate || ''),
     time: extractTime(event.dateEvent || event.strDate || ''),
     stadium: extractStadium(event),
@@ -71,7 +77,7 @@ function eventToMatchInfo(event: any): MatchInfo {
 
 function isNeymarRelated(event: any): boolean {
   if (!event) return false;
-  const keywords = ['neymar', 'santos'];
+  const keywords = ['neymar', 'santos', 'brasil', 'brazil'];
   const text = [
     event.strEvent,
     event.strHomeTeam,
@@ -86,39 +92,44 @@ function isNeymarRelated(event: any): boolean {
   return keywords.some((k) => text.includes(k));
 }
 
+async function fetchTeamEvents(teamId: number): Promise<any[]> {
+  const url = `${THE_SPORTS_DB_BASE}/eventsnext.php?id=${teamId}`;
+  const res = await fetch(url, {
+    next: { revalidate: 3600 },
+    headers: { 'User-Agent': 'Mozilla/5.0' },
+  });
+  if (!res.ok) throw new Error(`TheSportsDB retornou ${res.status} para team ${teamId}`);
+  const data = await res.json();
+  return data.events || [];
+}
+
 export async function checkMatchViaTheSportsDB(): Promise<{
   playing: boolean;
   match: MatchInfo | null;
   nextMatch: MatchInfo | null;
 }> {
   try {
-    const url = `${THE_SPORTS_DB_BASE}/eventsnext.php?id=${SANTOS_TEAM_ID}`;
-    const res = await fetch(url, {
-      next: { revalidate: 3600 },
-      headers: { 'User-Agent': 'Mozilla/5.0' },
-    });
+    const [santosEvents, brazilEvents] = await Promise.all([
+      fetchTeamEvents(SANTOS_TEAM_ID),
+      fetchTeamEvents(BRAZIL_TEAM_ID),
+    ]);
 
-    if (!res.ok) throw new Error(`TheSportsDB retornou ${res.status}`);
+    const allEvents = [...santosEvents, ...brazilEvents];
 
-    const data = await res.json();
-    const events: any[] = data.events || [];
-
-    if (events.length === 0) {
+    if (allEvents.length === 0) {
       return { playing: false, match: null, nextMatch: null };
     }
 
-    const upcomingMatches = events.map(eventToMatchInfo);
-    const next = upcomingMatches[0] ?? null;
+    const todayEvents = allEvents.filter((e) =>
+      isTodayOrUpcoming(e.dateEvent || e.strDate || '')
+    );
 
-    const playingToday = upcomingMatches.some((m) => {
-      const event = events[upcomingMatches.indexOf(m)];
-      return isTodayOrUpcoming(event.dateEvent || event.strDate || '') && isNeymarRelated(event);
-    });
+    const matchToday = todayEvents.find(isNeymarRelated) || null;
 
     return {
-      playing: playingToday,
-      match: playingToday ? next : null,
-      nextMatch: next,
+      playing: !!matchToday,
+      match: matchToday ? eventToMatchInfo(matchToday) : null,
+      nextMatch: allEvents.length > 0 ? eventToMatchInfo(allEvents[0]) : null,
     };
   } catch (err) {
     console.error('TheSportsDB error:', err);
@@ -132,34 +143,57 @@ export async function checkMatchFallback(): Promise<{
   nextMatch: MatchInfo | null;
 }> {
   try {
-    const proxyUrl = 'https://r.jina.ai/http://santosfc.com.br/jogos/';
-    const res = await fetch(proxyUrl, {
-      headers: {
-        'X-Return-Format': 'markdown',
-        'User-Agent': 'Mozilla/5.0',
-      },
-      next: { revalidate: 3600 },
-    });
-
-    if (!res.ok) throw new Error(`Fallback retornou ${res.status}`);
-
-    const text = await res.text();
     const hoje = new Date().toLocaleDateString('pt-BR');
+    const hojeISO = new Date().toISOString().split('T')[0];
+
+    const [santosRes, brazilRes] = await Promise.allSettled([
+      fetch('https://r.jina.ai/http://santosfc.com.br/jogos/', {
+        headers: { 'X-Return-Format': 'markdown', 'User-Agent': 'Mozilla/5.0' },
+        next: { revalidate: 3600 },
+      }),
+      fetch('https://r.jina.ai/https://www.cbf.com.br/selecao-brasileira/jogos', {
+        headers: { 'X-Return-Format': 'markdown', 'User-Agent': 'Mozilla/5.0' },
+        next: { revalidate: 3600 },
+      }),
+    ]);
+
+    let playing = false;
+    let source = '';
+
+    if (santosRes.status === 'fulfilled' && santosRes.value.ok) {
+      const text = await santosRes.value.text();
+      if (text.toLowerCase().includes('neymar') && text.includes(hoje)) {
+        playing = true;
+        source = 'Santos';
+      }
+    }
+
+    if (!playing && brazilRes.status === 'fulfilled' && brazilRes.value.ok) {
+      const text = await brazilRes.value.text();
+      if (text.toLowerCase().includes('neymar') && text.includes(hoje)) {
+        playing = true;
+        source = 'Seleção Brasileira';
+      }
+    }
 
     return {
-      playing: text.toLowerCase().includes('neymar') && text.includes(hoje),
-      match: null,
-      nextMatch: {
-        id: 'fallback',
-        tournament: 'Santos FC - Site Oficial',
-        homeTeam: 'Santos',
-        awayTeam: 'A definir',
-        homeLogo: '',
-        awayLogo: '',
-        date: hoje,
-        time: 'Verificar site oficial',
-        stadium: 'Vila Belmiro',
-      },
+      playing,
+      match: playing
+        ? {
+            id: 'fallback',
+            tournament: source === 'Seleção Brasileira' ? 'Seleção Brasileira' : 'Santos FC',
+            homeTeam: source === 'Seleção Brasileira' ? 'Brasil' : 'Santos',
+            awayTeam: 'A definir',
+            homeLogo: source === 'Seleção Brasileira'
+              ? 'https://www.thesportsdb.com/images/media/team/badge/26.png'
+              : 'https://www.thesportsdb.com/images/media/team/badge/n9qrn31715645718.png',
+            awayLogo: '',
+            date: hoje,
+            time: 'Verificar site oficial',
+            stadium: source === 'Seleção Brasileira' ? 'A definir' : 'Vila Belmiro',
+          }
+        : null,
+      nextMatch: null,
     };
   } catch (err) {
     console.error('Fallback error:', err);

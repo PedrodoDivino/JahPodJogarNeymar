@@ -72,7 +72,6 @@ export default function NeymarStatus() {
 
   const playing = data?.playing ?? false;
   const match = data?.match ?? null;
-  const nextMatch = data?.nextMatch ?? null;
   const error = data?.error ?? null;
 
   if (playing) {
