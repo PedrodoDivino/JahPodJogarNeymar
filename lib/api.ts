@@ -1,6 +1,6 @@
 import { MatchInfo } from '@/types';
 
-const SANTOS_TEAM_ID = 1861;
+const SANTOS_TEAM_ID = 134286;
 const BRAZIL_TEAM_ID = 134496;
 const THE_SPORTS_DB_BASE = 'https://www.thesportsdb.com/api/v1/json/3';
 
@@ -52,7 +52,7 @@ function extractTeamLogo(team: string): string {
   if (!team) return '';
   const lower = team.toLowerCase();
   if (lower.includes('santos')) {
-    return 'https://www.thesportsdb.com/images/media/team/badge/n9qrn31715645718.png';
+    return 'https://r2.thesportsdb.com/images/media/team/badge/j8xk9g1679447486.png';
   }
   if (lower.includes('brazil') || lower.includes('brasil')) {
     return 'https://r2.thesportsdb.com/images/media/team/badge/jl6dip1726167280.png';
@@ -109,12 +109,14 @@ export async function checkMatchViaTheSportsDB(): Promise<{
   nextMatch: MatchInfo | null;
 }> {
   try {
-    const [santosEvents, brazilEvents] = await Promise.all([
+    const results = await Promise.allSettled([
       fetchTeamEvents(SANTOS_TEAM_ID),
       fetchTeamEvents(BRAZIL_TEAM_ID),
     ]);
 
-    const allEvents = [...santosEvents, ...brazilEvents];
+    const allEvents = results.flatMap((r) =>
+      r.status === 'fulfilled' ? r.value : []
+    );
 
     if (allEvents.length === 0) {
       return { playing: false, match: null, nextMatch: null };
@@ -186,7 +188,7 @@ export async function checkMatchFallback(): Promise<{
             awayTeam: 'A definir',
             homeLogo: source === 'Seleção Brasileira'
               ? 'https://r2.thesportsdb.com/images/media/team/badge/jl6dip1726167280.png'
-              : 'https://www.thesportsdb.com/images/media/team/badge/n9qrn31715645718.png',
+              : 'https://r2.thesportsdb.com/images/media/team/badge/j8xk9g1679447486.png',
             awayLogo: '',
             date: hoje,
             time: 'Verificar site oficial',
