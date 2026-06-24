@@ -1,7 +1,7 @@
 import { MatchInfo } from '@/types';
 
 const SANTOS_TEAM_ID = 1861;
-const BRAZIL_TEAM_ID = 26;
+const BRAZIL_TEAM_ID = 134496;
 const THE_SPORTS_DB_BASE = 'https://www.thesportsdb.com/api/v1/json/3';
 
 function parseDate(dateStr: string): Date | null {
@@ -55,7 +55,7 @@ function extractTeamLogo(team: string): string {
     return 'https://www.thesportsdb.com/images/media/team/badge/n9qrn31715645718.png';
   }
   if (lower.includes('brazil') || lower.includes('brasil')) {
-    return 'https://www.thesportsdb.com/images/media/team/badge/26.png';
+    return 'https://r2.thesportsdb.com/images/media/team/badge/jl6dip1726167280.png';
   }
   const name = lower.replace(/\s+/g, '');
   return `https://www.thesportsdb.com/images/media/team/badge/${name}.png`;
@@ -185,7 +185,7 @@ export async function checkMatchFallback(): Promise<{
             homeTeam: source === 'Seleção Brasileira' ? 'Brasil' : 'Santos',
             awayTeam: 'A definir',
             homeLogo: source === 'Seleção Brasileira'
-              ? 'https://www.thesportsdb.com/images/media/team/badge/26.png'
+              ? 'https://r2.thesportsdb.com/images/media/team/badge/jl6dip1726167280.png'
               : 'https://www.thesportsdb.com/images/media/team/badge/n9qrn31715645718.png',
             awayLogo: '',
             date: hoje,
