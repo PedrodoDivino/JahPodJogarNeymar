@@ -2,6 +2,7 @@ import type { MatchInfo } from '@/types';
 
 const SANTOS_TEAM_ID = 134286;
 const BRAZIL_TEAM_ID = 134496;
+const FIFA_WORLD_CUP_LEAGUE_ID = 4429;
 const THE_SPORTS_DB_BASE = 'https://www.thesportsdb.com/api/v1/json/3';
 const BRAZIL_TIME_ZONE = 'America/Sao_Paulo';
 const DATE_ONLY_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
@@ -172,15 +173,35 @@ function isNeymarRelated(event: any): boolean {
   return keywords.some((k) => text.includes(k));
 }
 
-async function fetchTeamEvents(teamId: number): Promise<any[]> {
-  const url = `${THE_SPORTS_DB_BASE}/eventsnext.php?id=${teamId}`;
+function extractEventsPayload(data: any): any[] {
+  if (Array.isArray(data?.events)) return data.events;
+  if (Array.isArray(data?.results)) return data.results;
+  if (Array.isArray(data?.event)) return data.event;
+  return [];
+}
+
+async function fetchTeamEvents(teamId: number, endpoint = 'eventsnext.php'): Promise<any[]> {
+  const url = `${THE_SPORTS_DB_BASE}/${endpoint}?id=${teamId}`;
   const res = await fetch(url, {
-    next: { revalidate: 3600 },
+    cache: 'no-store',
     headers: { 'User-Agent': 'Mozilla/5.0' },
   });
   if (!res.ok) throw new Error(`TheSportsDB retornou ${res.status} para team ${teamId}`);
   const data = await res.json();
-  return data.events || [];
+  return extractEventsPayload(data);
+}
+
+async function fetchDayEvents(leagueId?: number): Promise<any[]> {
+  const today = formatBrazilDateKey(new Date());
+  const league = leagueId ? `&l=${leagueId}` : '';
+  const url = `${THE_SPORTS_DB_BASE}/eventsday.php?d=${today}&s=Soccer${league}`;
+  const res = await fetch(url, {
+    cache: 'no-store',
+    headers: { 'User-Agent': 'Mozilla/5.0' },
+  });
+  if (!res.ok) throw new Error(`TheSportsDB retornou ${res.status} para eventsday`);
+  const data = await res.json();
+  return extractEventsPayload(data);
 }
 
 export async function checkMatchViaTheSportsDB(): Promise<{
@@ -189,14 +210,30 @@ export async function checkMatchViaTheSportsDB(): Promise<{
   nextMatch: MatchInfo | null;
 }> {
   try {
-    const results = await Promise.allSettled([
+    const nextResults = await Promise.allSettled([
       fetchTeamEvents(SANTOS_TEAM_ID),
       fetchTeamEvents(BRAZIL_TEAM_ID),
     ]);
 
-    const allEvents = results.flatMap((r) =>
+    const recentResults = await Promise.allSettled([
+      fetchTeamEvents(SANTOS_TEAM_ID, 'eventslast.php'),
+      fetchTeamEvents(BRAZIL_TEAM_ID, 'eventslast.php'),
+    ]);
+    const dayResults = await Promise.allSettled([
+      fetchDayEvents(),
+      fetchDayEvents(FIFA_WORLD_CUP_LEAGUE_ID),
+    ]);
+
+    const nextEvents = nextResults.flatMap((r) =>
       r.status === 'fulfilled' ? r.value : []
     );
+    const recentEvents = recentResults.flatMap((r) =>
+      r.status === 'fulfilled' ? r.value : []
+    );
+    const dayEvents = dayResults.flatMap((r) =>
+      r.status === 'fulfilled' ? r.value : []
+    );
+    const allEvents = [...nextEvents, ...recentEvents, ...dayEvents];
 
     if (allEvents.length === 0) {
       return { playing: false, match: null, nextMatch: null };
@@ -209,7 +246,7 @@ export async function checkMatchViaTheSportsDB(): Promise<{
     return {
       playing: !!matchToday,
       match: matchToday ? eventToMatchInfo(matchToday) : null,
-      nextMatch: allEvents.length > 0 ? eventToMatchInfo(allEvents[0]) : null,
+      nextMatch: nextEvents.length > 0 ? eventToMatchInfo(nextEvents[0]) : null,
     };
   } catch (err) {
     console.error('TheSportsDB error:', err);

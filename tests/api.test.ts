@@ -94,3 +94,126 @@ test('marks Brazil as playing when TheSportsDB returns today as a date-only even
   assert.equal(result.match?.date, 'quarta-feira, 24 de junho de 2026');
   assert.equal(result.match?.time, '19:00');
 });
+
+test('marks Brazil as playing when a current match moved from next events to recent events', async () => {
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    const url = String(input);
+
+    if (url.includes('eventsnext.php')) {
+      return jsonResponse({
+        events: [
+          {
+            idEvent: '2478802',
+            strEvent: 'Vitoria de Guimaraes vs Santos',
+            strHomeTeam: 'Vitoria de Guimaraes',
+            strAwayTeam: 'Santos',
+            dateEvent: '2026-07-12',
+            strTimestamp: '2026-07-12T17:00:00',
+            strTime: '17:00:00',
+            strVenue: 'Estadio D. Afonso Henriques',
+            strLeague: 'Club Friendly',
+          },
+        ],
+      });
+    }
+
+    if (url.includes('eventslast.php') && url.includes('id=134496')) {
+      return jsonResponse({
+        results: [
+          {
+            idEvent: '2391765',
+            strEvent: 'Scotland vs Brazil',
+            strHomeTeam: 'Scotland',
+            strAwayTeam: 'Brazil',
+            dateEvent: '2026-06-24',
+            strTimestamp: '2026-06-24T17:00:00',
+            strTime: '17:00:00',
+            strVenue: 'Hard Rock Stadium',
+            strLeague: 'FIFA World Cup',
+          },
+        ],
+      });
+    }
+
+    return jsonResponse({ events: [] });
+  }) as typeof fetch;
+
+  const result = await checkMatchViaTheSportsDB();
+
+  assert.equal(result.playing, true);
+  assert.equal(result.match?.id, '2391765');
+  assert.equal(result.match?.homeTeam, 'Scotland');
+  assert.equal(result.match?.awayTeam, 'Brazil');
+  assert.equal(result.match?.time, '14:00');
+});
+
+test('marks Brazil as playing when an in-progress match appears only in the day schedule', async () => {
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    const url = String(input);
+
+    if (url.includes('eventsnext.php')) {
+      return jsonResponse({
+        events: [
+          {
+            idEvent: '2478802',
+            strEvent: 'Vitoria de Guimaraes vs Santos',
+            strHomeTeam: 'Vitoria de Guimaraes',
+            strAwayTeam: 'Santos',
+            dateEvent: '2026-07-12',
+            strTimestamp: '2026-07-12T17:00:00',
+            strTime: '17:00:00',
+            strVenue: 'Estadio D. Afonso Henriques',
+            strLeague: 'Club Friendly',
+          },
+        ],
+      });
+    }
+
+    if (url.includes('eventslast.php')) {
+      return jsonResponse({
+        results: [
+          {
+            idEvent: '2391748',
+            strEvent: 'Brazil vs Haiti',
+            strHomeTeam: 'Brazil',
+            strAwayTeam: 'Haiti',
+            dateEvent: '2026-06-20',
+            strTimestamp: '2026-06-20T00:30:00',
+            strTime: '00:30:00',
+            strVenue: 'Lincoln Financial Field',
+            strLeague: 'FIFA World Cup',
+          },
+        ],
+      });
+    }
+
+    if (url.includes('eventsday.php')) {
+      return jsonResponse({
+        events: [
+          {
+            idEvent: '2391765',
+            strEvent: 'Scotland vs Brazil',
+            strHomeTeam: 'Scotland',
+            strAwayTeam: 'Brazil',
+            dateEvent: '2026-06-24',
+            strTimestamp: '2026-06-24T22:00:00',
+            strTime: '22:00:00',
+            strStatus: '2H',
+            strVenue: 'Hard Rock Stadium',
+            strLeague: 'FIFA World Cup',
+          },
+        ],
+      });
+    }
+
+    return jsonResponse({ events: [] });
+  }) as typeof fetch;
+
+  const result = await checkMatchViaTheSportsDB();
+
+  assert.equal(result.playing, true);
+  assert.equal(result.match?.id, '2391765');
+  assert.equal(result.match?.homeTeam, 'Scotland');
+  assert.equal(result.match?.awayTeam, 'Brazil');
+  assert.equal(result.match?.time, '19:00');
+});
